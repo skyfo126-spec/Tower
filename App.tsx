@@ -101,7 +101,14 @@ const App: React.FC = () => {
     }
 
     balloonsRef.current.forEach(b => {
-      b.distanceTravelled += b.speed * dt;
+      // Handle slow timer
+      if (b.slowTimer > 0) {
+        b.slowTimer -= dt;
+      }
+
+      const effectiveSpeed = b.slowTimer > 0 ? b.speed * 0.5 : b.speed;
+      b.distanceTravelled += effectiveSpeed * dt;
+      
       const pos = getPathPosition(PATH_POINTS, b.distanceTravelled);
       b.x = pos.x;
       b.y = pos.y;
@@ -190,6 +197,15 @@ const App: React.FC = () => {
       ctx.beginPath();
       ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
       ctx.fill();
+
+      // If slowed, draw an ice overlay
+      if (b.slowTimer > 0) {
+        ctx.fillStyle = 'rgba(191, 219, 254, 0.5)';
+        ctx.beginPath();
+        ctx.arc(b.x, b.y, b.radius + 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.beginPath();
       ctx.arc(b.x - b.radius * 0.3, b.y - b.radius * 0.3, b.radius * 0.4, 0, Math.PI * 2);
@@ -258,6 +274,17 @@ const App: React.FC = () => {
       ctx.fill();
       ctx.fillStyle = '#111827';
       ctx.fillRect(-size * 0.2, -size * 1.5, size * 0.4, size * 1.5);
+    } else if (t.type === TowerType.ICE_TOWER) {
+      ctx.fillStyle = '#60a5fa';
+      ctx.beginPath();
+      ctx.moveTo(0, -size);
+      ctx.lineTo(size * 0.8, size * 0.8);
+      ctx.lineTo(-size * 0.8, size * 0.8);
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = '#1d4ed8';
+      ctx.lineWidth = 3;
+      ctx.stroke();
     }
     ctx.fillStyle = '#fde047';
     for(let i=0; i<t.level; i++) {
@@ -271,7 +298,7 @@ const App: React.FC = () => {
     const stats = BALLOON_STATS[color];
     const id = `balloon-${nextBalloonId.current++}`;
     balloonsRef.current.push({
-      id, color, health: stats.health, maxHealth: stats.health, speed: stats.speed,
+      id, color, health: stats.health, maxHealth: stats.health, speed: stats.speed, slowTimer: 0,
       distanceTravelled: distance, ...getPathPosition(PATH_POINTS, distance), radius: stats.radius
     });
   };
@@ -296,6 +323,9 @@ const App: React.FC = () => {
       }
     } else if (tower.type === TowerType.CANNON) {
       spawnProjectile(tower, tower.x, tower.y, Math.cos(angle) * speed, Math.sin(angle) * speed);
+    } else if (tower.type === TowerType.ICE_TOWER) {
+      // Ice tower fires a frost bolt
+      spawnProjectile(tower, tower.x, tower.y, Math.cos(angle) * speed * 0.8, Math.sin(angle) * speed * 0.8);
     }
   };
 
@@ -307,12 +337,17 @@ const App: React.FC = () => {
       id, type: tower.type, x, y, vx, vy, damage: totalDmg,
       rangeRemaining: tower.range * 1.5,
       aoe: (tower.type === TowerType.CANNON) ? (stats.aoe || 60) : 0,
-      color: tower.type === TowerType.CANNON ? '#111827' : '#fbbf24',
-      radius: tower.type === TowerType.CANNON ? 8 : 4
+      color: tower.type === TowerType.CANNON ? '#111827' : tower.type === TowerType.ICE_TOWER ? '#bfdbfe' : '#fbbf24',
+      radius: tower.type === TowerType.CANNON ? 8 : tower.type === TowerType.ICE_TOWER ? 6 : 4
     });
   };
 
   const handleHit = (p: Projectile, b: Balloon) => {
+    // Apply slow if it's an ice tower projectile
+    if (p.type === TowerType.ICE_TOWER) {
+      b.slowTimer = 90; // Approx 1.5 seconds at 60fps
+    }
+
     if (p.aoe > 0) {
       balloonsRef.current.forEach(otherB => {
         if (getDistance(p, otherB) <= p.aoe) applyDamage(otherB, p.damage);
@@ -337,8 +372,11 @@ const App: React.FC = () => {
     else if (b.color === BalloonColor.GREEN) next = BalloonColor.BLUE;
     else if (b.color === BalloonColor.BLUE) next = BalloonColor.RED;
     if (next) {
+      // Children inherit slow state partially or start fresh? Let's keep slow for consistency.
       spawnBalloon(next, b.distanceTravelled);
       spawnBalloon(next, b.distanceTravelled - 10);
+      const last2 = balloonsRef.current.slice(-2);
+      last2.forEach(child => child.slowTimer = b.slowTimer);
     }
     balloonsRef.current = balloonsRef.current.filter(other => other.id !== b.id);
   };
@@ -434,13 +472,12 @@ const App: React.FC = () => {
     setGameState(prev => ({ ...prev, gold: prev.gold + refund, selectedTowerId: null }));
   };
 
-  // Gemini AI Advice Function
   const askAIAdvisor = async () => {
     if (isConsultingAI) return;
     setIsConsultingAI(true);
     setAiAdvice("Consulting Strategist...");
     try {
-      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const ai = new GoogleGenAI({ apiKey: "AIzaSyArGngnqBqluG0BThhkieus50_C3RKB5CM" });
       const towerCounts = towersRef.current.reduce((acc: any, t) => {
         acc[t.type] = (acc[t.type] || 0) + 1;
         return acc;
@@ -451,6 +488,7 @@ Wave: ${gameState.wave}
 Gold: ${gameState.gold}
 Lives: ${gameState.lives}
 Towers: ${JSON.stringify(towerCounts)}
+Note: We have a new tower, the Ice Tower, which slows enemies.
 Advice: 1 short sentence on what to build or upgrade next.`;
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
@@ -508,7 +546,9 @@ Advice: 1 short sentence on what to build or upgrade next.`;
             <div className="grid grid-cols-1 gap-3">
               {(Object.entries(TOWER_STATS) as [TowerType, any][]).map(([type, stats]) => (
                 <button key={type} onClick={() => setGameState(prev => ({ ...prev, placingTowerType: prev.placingTowerType === type ? null : type, selectedTowerId: null }))} disabled={gameState.gold < stats.cost} className={`relative flex items-center p-3 rounded-xl border-2 transition ${gameState.placingTowerType === type ? 'bg-indigo-900/50 border-indigo-500' : 'bg-slate-700/50 border-slate-700 hover:border-slate-500'} ${gameState.gold < stats.cost ? 'opacity-50 cursor-not-allowed grayscale' : ''}`}>
-                  <div className="w-12 h-12 bg-slate-600 rounded-lg flex items-center justify-center text-2xl mr-4">{type === TowerType.DART_MONKEY ? '🐒' : type === TowerType.TACK_SHOOTER ? '⚙️' : '💣'}</div>
+                  <div className="w-12 h-12 bg-slate-600 rounded-lg flex items-center justify-center text-2xl mr-4">
+                    {type === TowerType.DART_MONKEY ? '🐒' : type === TowerType.TACK_SHOOTER ? '⚙️' : type === TowerType.CANNON ? '💣' : '❄️'}
+                  </div>
                   <div className="flex flex-col items-start"><span className="font-bold text-sm">{stats.name}</span><span className="text-xs text-yellow-400 font-mono">${stats.cost}</span></div>
                 </button>
               ))}

@@ -76,5 +76,18 @@ export const TOWER_STATS = {
       { name: 'Long Range', cost: 350, range: 80, cooldown: 0, damage: 0 },
       { name: 'Rapid Fire', cost: 800, range: 10, cooldown: -30, damage: 1 },
     ]
+  },
+  [TowerType.ICE_TOWER]: {
+    name: 'Ice Tower',
+    cost: 450,
+    range: 130,
+    cooldown: 50,
+    damage: 0,
+    description: 'Freezes bloons, slowing them down.',
+    upgrades: [
+      { name: 'Deep Freeze', cost: 200, range: 20, cooldown: 0, damage: 0 },
+      { name: 'Frostbite', cost: 400, range: 0, cooldown: -15, damage: 1 },
+      { name: 'Arctic Wind', cost: 800, range: 60, cooldown: -10, damage: 0 },
+    ]
   }
 };

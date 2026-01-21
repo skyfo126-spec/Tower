@@ -2,7 +2,8 @@
 export enum TowerType {
   DART_MONKEY = 'DART_MONKEY',
   TACK_SHOOTER = 'TACK_SHOOTER',
-  CANNON = 'CANNON'
+  CANNON = 'CANNON',
+  ICE_TOWER = 'ICE_TOWER'
 }
 
 export enum BalloonColor {
@@ -24,6 +25,7 @@ export interface Balloon {
   health: number;
   maxHealth: number;
   speed: number;
+  slowTimer: number; // Duration of the slow effect in frames/dt
   distanceTravelled: number;
   x: number;
   y: number;
