@@ -4,7 +4,7 @@ import { TowerType, BalloonColor, Point } from './types';
 export const CANVAS_WIDTH = 1000;
 export const CANVAS_HEIGHT = 650;
 
-export const INITIAL_GOLD = 650;
+export const INITIAL_GOLD = 1000;
 export const INITIAL_LIVES = 100;
 export const TOTAL_WAVES = 30;
 
