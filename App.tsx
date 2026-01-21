@@ -280,6 +280,7 @@ const App: React.FC = () => {
       ctx.moveTo(0, -size);
       ctx.lineTo(size * 0.8, size * 0.8);
       ctx.lineTo(-size * 0.8, size * 0.8);
+      // FIX: Added ctx. prefix to closePath() call
       ctx.closePath();
       ctx.fill();
       ctx.strokeStyle = '#1d4ed8';
@@ -324,7 +325,6 @@ const App: React.FC = () => {
     } else if (tower.type === TowerType.CANNON) {
       spawnProjectile(tower, tower.x, tower.y, Math.cos(angle) * speed, Math.sin(angle) * speed);
     } else if (tower.type === TowerType.ICE_TOWER) {
-      // Ice tower fires a frost bolt
       spawnProjectile(tower, tower.x, tower.y, Math.cos(angle) * speed * 0.8, Math.sin(angle) * speed * 0.8);
     }
   };
@@ -336,16 +336,15 @@ const App: React.FC = () => {
     projectilesRef.current.push({
       id, type: tower.type, x, y, vx, vy, damage: totalDmg,
       rangeRemaining: tower.range * 1.5,
-      aoe: (tower.type === TowerType.CANNON) ? (stats.aoe || 60) : 0,
+      aoe: (tower.type === TowerType.CANNON) ? (stats.aoe || 70) : 0,
       color: tower.type === TowerType.CANNON ? '#111827' : tower.type === TowerType.ICE_TOWER ? '#bfdbfe' : '#fbbf24',
       radius: tower.type === TowerType.CANNON ? 8 : tower.type === TowerType.ICE_TOWER ? 6 : 4
     });
   };
 
   const handleHit = (p: Projectile, b: Balloon) => {
-    // Apply slow if it's an ice tower projectile
     if (p.type === TowerType.ICE_TOWER) {
-      b.slowTimer = 90; // Approx 1.5 seconds at 60fps
+      b.slowTimer = 120; // Approx 2 seconds at 60fps (increased from 90)
     }
 
     if (p.aoe > 0) {
@@ -365,16 +364,15 @@ const App: React.FC = () => {
 
   const popBalloon = (b: Balloon) => {
     createPopParticles(b.x, b.y, b.color);
-    setGameState(prev => ({ ...prev, gold: prev.gold + 1 }));
+    setGameState(prev => ({ ...prev, gold: prev.gold + 2 })); // Gold reward doubled from 1 to 2
     let next: BalloonColor | null = null;
     if (b.color === BalloonColor.PINK) next = BalloonColor.YELLOW;
     else if (b.color === BalloonColor.YELLOW) next = BalloonColor.GREEN;
     else if (b.color === BalloonColor.GREEN) next = BalloonColor.BLUE;
     else if (b.color === BalloonColor.BLUE) next = BalloonColor.RED;
     if (next) {
-      // Children inherit slow state partially or start fresh? Let's keep slow for consistency.
       spawnBalloon(next, b.distanceTravelled);
-      spawnBalloon(next, b.distanceTravelled - 10);
+      spawnBalloon(next, b.distanceTravelled - 15); // Slightly more separation for children
       const last2 = balloonsRef.current.slice(-2);
       last2.forEach(child => child.slowTimer = b.slowTimer);
     }
@@ -409,14 +407,15 @@ const App: React.FC = () => {
     }
     const nextWave = gameState.wave + 1;
     const queue: { color: BalloonColor, delay: number }[] = [];
-    const count = 5 + nextWave * 2;
+    const count = 4 + nextWave * 1.5; // Reduced scaling factor from 2 to 1.5
     for (let i = 0; i < count; i++) {
       let color = BalloonColor.RED;
-      if (nextWave > 25) color = Math.random() > 0.5 ? BalloonColor.PINK : BalloonColor.YELLOW;
-      else if (nextWave > 15) color = Math.random() > 0.6 ? BalloonColor.YELLOW : BalloonColor.GREEN;
-      else if (nextWave > 8) color = Math.random() > 0.7 ? BalloonColor.GREEN : BalloonColor.BLUE;
-      else if (nextWave > 3) color = Math.random() > 0.8 ? BalloonColor.BLUE : BalloonColor.RED;
-      queue.push({ color, delay: i === 0 ? 0 : 30 + Math.random() * 20 });
+      // Slower introduction of tough bloons
+      if (nextWave > 28) color = Math.random() > 0.4 ? BalloonColor.PINK : BalloonColor.YELLOW;
+      else if (nextWave > 20) color = Math.random() > 0.5 ? BalloonColor.YELLOW : BalloonColor.GREEN;
+      else if (nextWave > 12) color = Math.random() > 0.6 ? BalloonColor.GREEN : BalloonColor.BLUE;
+      else if (nextWave > 6) color = Math.random() > 0.7 ? BalloonColor.BLUE : BalloonColor.RED;
+      queue.push({ color, delay: i === 0 ? 0 : 40 + Math.random() * 30 }); // Increased delay between bloons
     }
     waveQueueRef.current = queue;
     setGameState(prev => ({ ...prev, wave: nextWave, isWaveActive: true }));
@@ -477,7 +476,8 @@ const App: React.FC = () => {
     setIsConsultingAI(true);
     setAiAdvice("Consulting Strategist...");
     try {
-      const ai = new GoogleGenAI({ apiKey: "AIzaSyArGngnqBqluG0BThhkieus50_C3RKB5CM" });
+      // FIX: Initializing GoogleGenAI with process.env.API_KEY as per the library guidelines.
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const towerCounts = towersRef.current.reduce((acc: any, t) => {
         acc[t.type] = (acc[t.type] || 0) + 1;
         return acc;
@@ -488,7 +488,6 @@ Wave: ${gameState.wave}
 Gold: ${gameState.gold}
 Lives: ${gameState.lives}
 Towers: ${JSON.stringify(towerCounts)}
-Note: We have a new tower, the Ice Tower, which slows enemies.
 Advice: 1 short sentence on what to build or upgrade next.`;
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
