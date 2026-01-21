@@ -1,0 +1,5 @@
+{
+  "name": "Bloons TD React",
+  "description": "A high-performance 2D Tower Defense game inspired by Bloons TD, featuring multiple tower types, upgrading systems, and wave-based balloon spawning.",
+  "requestFramePermissions": []
+}
